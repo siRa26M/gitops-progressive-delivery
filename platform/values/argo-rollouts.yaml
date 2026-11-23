@@ -1,5 +1,9 @@
 controller:
   replicas: 1
+  # Traefik v3 CRDs live in traefik.io (v2 used traefik.containo.us)
+  extraArgs:
+    - --traefik-api-group=traefik.io
+    - --traefik-api-version=traefik.io/v1alpha1
   resources:
     requests: { cpu: 50m, memory: 64Mi }
     limits: { cpu: 500m, memory: 256Mi }
