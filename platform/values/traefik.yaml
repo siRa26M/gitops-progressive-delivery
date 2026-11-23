@@ -1,14 +1,16 @@
 deployment:
   replicas: 1
 
+# chart >= 41: type lives under service.spec
 service:
-  type: NodePort
+  spec:
+    type: NodePort
 
 ports:
   web:
-    nodePort: 30080 # kind maps this to localhost:80
+    nodePort: 30080     # kind maps this to localhost:80
   websecure:
-    nodePort: 30443 # kind maps this to localhost:443
+    nodePort: 30443     # kind maps this to localhost:443
 
 ingressClass:
   enabled: true
@@ -16,14 +18,15 @@ ingressClass:
 
 providers:
   kubernetesCRD:
-    enabled: true # IngressRoute / TraefikService (canary weights)
+    enabled: true       # IngressRoute / TraefikService (canary weights)
   kubernetesIngress:
-    enabled: true # plain Ingress for Argo CD / Prometheus / Rollouts UIs
+    enabled: true       # plain Ingress for Argo CD / Prometheus / Rollouts UIs
+    # kind has no load balancer: report a fixed address instead of the Service's
+    publishedService:
+      enabled: false
+    ingressEndpoint:
+      ip: 127.0.0.1
 
 resources:
   requests: { cpu: 50m, memory: 64Mi }
   limits: { cpu: 500m, memory: 256Mi }
-
-# kind has no load balancer: publish 127.0.0.1 on Ingress status so Argo CD sees them Healthy
-additionalArguments:
-  - --providers.kubernetesingress.ingressendpoint.ip=127.0.0.1
