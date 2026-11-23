@@ -1,0 +1,49 @@
+# Environment promotion as a pull request: copies the image tag that is live in
+# <from> into <to>'s overlay. Merge = deploy (Argo CD picks it up). The PR is the
+# approval gate and the audit trail; reverting it is the rollback.
+name: promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: Source environment
+        type: choice
+        options: [dev, staging]
+        default: dev
+      to:
+        description: Target environment
+        type: choice
+        options: [staging, prod]
+        default: staging
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: bump
+        run: |
+          set -euo pipefail
+          src="apps/demo-app/overlays/${{ inputs.from }}/kustomization.yaml"
+          dst="apps/demo-app/overlays/${{ inputs.to }}/kustomization.yaml"
+          tag="$(awk -F'"' '/newTag:/ {print $2; exit}' "$src")"
+          old="$(awk -F'"' '/newTag:/ {print $2; exit}' "$dst")"
+          sed -i -E "s|(newTag: )\".*\"|\1\"$tag\"|" "$dst"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "old=$old" >> "$GITHUB_OUTPUT"
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          branch: promote/${{ inputs.to }}-${{ steps.bump.outputs.tag }}
+          title: "promote: demo-app ${{ steps.bump.outputs.tag }} ${{ inputs.from }} -> ${{ inputs.to }}"
+          commit-message: "promote: demo-app ${{ steps.bump.outputs.tag }} ${{ inputs.from }} -> ${{ inputs.to }}"
+          body: |
+            Promotes `demo-app` **${{ steps.bump.outputs.old }} → ${{ steps.bump.outputs.tag }}** in `${{ inputs.to }}`
+            (currently healthy in `${{ inputs.from }}`).
+
+            On merge, Argo CD syncs and Argo Rollouts runs the `${{ inputs.to }}` canary
+            with Prometheus analysis; a failed analysis aborts and shifts traffic back automatically.

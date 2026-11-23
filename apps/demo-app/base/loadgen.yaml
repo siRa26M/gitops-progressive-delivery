@@ -1,0 +1,40 @@
+# Synthetic traffic through the edge router so canary analysis always has
+# signal. In real environments this is replaced by user traffic.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgen
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: loadgen }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: loadgen }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: loadgen
+          image: curlimages/curl:8.11.1
+          envFrom:
+            - configMapRef: { name: loadgen-config }
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "sending traffic to ${TARGET_HOST}"
+              while true; do
+                curl -s -o /dev/null --max-time 2 -H "Host: ${TARGET_HOST}" "${EDGE_URL}" || true
+                sleep 0.1
+              done
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 32Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }

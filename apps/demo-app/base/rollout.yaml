@@ -1,0 +1,100 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: demo-app
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  replicas: 3
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: demo-app
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: demo-app
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: /metrics
+    spec:
+      serviceAccountName: demo-app
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: { app.kubernetes.io/name: demo-app }
+      terminationGracePeriodSeconds: 15
+      containers:
+        - name: demo-app
+          image: demo-app # rewritten per overlay via `images:`
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: 8080, protocol: TCP }
+          envFrom:
+            - configMapRef: { name: demo-app-config }
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: SECRETS_DIR
+              value: /etc/demo-app/secrets
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }
+            limits: { cpu: 200m, memory: 64Mi }
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            # Mounted as a directory (no subPath) so rotated values land in place.
+            - { name: secrets, mountPath: /etc/demo-app/secrets, readOnly: true }
+      volumes:
+        - name: secrets
+          secret:
+            secretName: demo-app-secrets
+  strategy:
+    canary:
+      stableService: demo-app-stable
+      canaryService: demo-app-canary
+      trafficRouting:
+        traefik:
+          weightedTraefikServiceName: demo-app
+      # Background analysis: starts after the first traffic shift and runs until
+      # the rollout completes. A failed AnalysisRun aborts the rollout, shifting
+      # 100% of traffic back to stable and scaling the canary down.
+      analysis:
+        startingStep: 1
+        templates:
+          - templateName: error-rate
+        args:
+          - name: namespace
+            valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
+          - name: canary-hash
+            valueFrom: { podTemplateHashValue: Latest }
+      abortScaleDownDelaySeconds: 10
+      # Default (prod) profile - overlays override for faster lower envs.
+      steps:
+        - setWeight: 10
+        - pause: { duration: 45s }
+        - setWeight: 25
+        - pause: { duration: 45s }
+        - setWeight: 50
+        - pause: { duration: 45s }
+        - setWeight: 75
+        - pause: { duration: 30s }

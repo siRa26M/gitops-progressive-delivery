@@ -1,0 +1,12 @@
+# Sealing private key + plaintext secret inputs. NEVER commit.
+.secrets/
+*.key
+*.env
+!*.env.example
+
+# build / editor
+app/demo-app
+*.bak
+.DS_Store
+.idea/
+.vscode/

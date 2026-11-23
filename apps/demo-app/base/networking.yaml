@@ -1,0 +1,43 @@
+# Stable + canary Services. Argo Rollouts injects rollouts-pod-template-hash
+# into each selector at runtime to pin them to the right ReplicaSet.
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-app-stable
+spec:
+  selector: { app.kubernetes.io/name: demo-app }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-app-canary
+spec:
+  selector: { app.kubernetes.io/name: demo-app }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+# Weighted router. Argo Rollouts rewrites the weights during a canary
+# (ignored in the Argo CD diff via ignoreDifferences on the ApplicationSet).
+apiVersion: traefik.io/v1alpha1
+kind: TraefikService
+metadata:
+  name: demo-app
+spec:
+  weighted:
+    services:
+      - { name: demo-app-stable, port: 80, weight: 100 }
+      - { name: demo-app-canary, port: 80, weight: 0 }
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: demo-app
+spec:
+  entryPoints: [web]
+  routes:
+    - kind: Rule
+      match: Host(`demo.127.0.0.1.nip.io`) # patched per overlay
+      services:
+        - { name: demo-app, kind: TraefikService }

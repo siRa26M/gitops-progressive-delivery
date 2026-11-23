@@ -1,0 +1,16 @@
+controller:
+  replicas: 1
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+
+dashboard:
+  enabled: true
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hosts:
+      - rollouts.127.0.0.1.nip.io
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { cpu: 100m, memory: 128Mi }

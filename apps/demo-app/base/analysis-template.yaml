@@ -1,0 +1,33 @@
+# Canary health gate. Queries ONLY the canary ReplicaSet's pods (selected by
+# rollouts-pod-template-hash) so stable traffic can't mask a bad release.
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: error-rate
+spec:
+  args:
+    - name: namespace
+    - name: canary-hash
+    - name: max-error-rate
+      value: "0.05"
+  metrics:
+    - name: canary-5xx-ratio
+      initialDelay: 20s
+      interval: 20s
+      failureLimit: 1 # 2nd failed measurement => rollback
+      successCondition: "result[0] <= {{args.max-error-rate}}"
+      provider:
+        prometheus:
+          address: http://prometheus-server.monitoring.svc.cluster.local
+          # Numerator falls back to 0 and denominator to 1 when there is no
+          # data yet, so the query always returns a single number.
+          query: |
+            (
+              sum(rate(http_requests_total{namespace="{{args.namespace}}",rollouts_pod_template_hash="{{args.canary-hash}}",route="/",code=~"5.."}[1m]))
+              or vector(0)
+            )
+            /
+            (
+              sum(rate(http_requests_total{namespace="{{args.namespace}}",rollouts_pod_template_hash="{{args.canary-hash}}",route="/"}[1m])) > 0
+              or vector(1)
+            )

@@ -1,0 +1,25 @@
+deployment:
+  replicas: 1
+
+service:
+  type: NodePort
+
+ports:
+  web:
+    nodePort: 30080 # kind maps this to localhost:80
+  websecure:
+    nodePort: 30443 # kind maps this to localhost:443
+
+ingressClass:
+  enabled: true
+  isDefaultClass: true
+
+providers:
+  kubernetesCRD:
+    enabled: true # IngressRoute / TraefikService (canary weights)
+  kubernetesIngress:
+    enabled: true # plain Ingress for Argo CD / Prometheus / Rollouts UIs
+
+resources:
+  requests: { cpu: 50m, memory: 64Mi }
+  limits: { cpu: 500m, memory: 256Mi }

@@ -1,0 +1,48 @@
+# Two trust boundaries:
+#   platform - cluster-wide controllers (may create CRDs, ClusterRoles, ...)
+#   apps     - product workloads; limited to their env namespaces and this repo only.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  description: Cluster-wide platform components
+  sourceRepos:
+    - https://github.com/siRa26M/gitops-progressive-delivery.git
+    - https://bitnami-labs.github.io/sealed-secrets
+    - https://traefik.github.io/charts
+    - https://argoproj.github.io/argo-helm
+    - https://prometheus-community.github.io/helm-charts
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: "*"
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: apps
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  description: Product workloads (least privilege)
+  sourceRepos:
+    - https://github.com/siRa26M/gitops-progressive-delivery.git
+  destinations:
+    - { server: https://kubernetes.default.svc, namespace: dev }
+    - { server: https://kubernetes.default.svc, namespace: staging }
+    - { server: https://kubernetes.default.svc, namespace: prod }
+  # Only Namespaces at cluster scope - no CRDs, ClusterRoles, webhooks.
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  # App teams cannot grant themselves RBAC from Git.
+  namespaceResourceBlacklist:
+    - { group: rbac.authorization.k8s.io, kind: Role }
+    - { group: rbac.authorization.k8s.io, kind: RoleBinding }

@@ -1,0 +1,43 @@
+# Helm values for the one imperative step: installing Argo CD itself.
+# Everything after this is reconciled from Git by Argo CD.
+global:
+  domain: argocd.127.0.0.1.nip.io
+
+configs:
+  params:
+    # TLS is terminated at the edge (Traefik); local lab only.
+    server.insecure: true
+  cm:
+    # Poll Git every 30s (no webhook reachable on a laptop cluster).
+    timeout.reconciliation: 30s
+    # Restore health assessment for Application CRs so sync-waves in the
+    # app-of-apps actually wait for child apps to become Healthy.
+    resource.customizations.health.argoproj.io_Application: |
+      hs = {}
+      hs.status = "Progressing"
+      hs.message = ""
+      if obj.status ~= nil and obj.status.health ~= nil then
+        hs.status = obj.status.health.status
+        if obj.status.health.message ~= nil then
+          hs.message = obj.status.health.message
+        end
+      end
+      return hs
+
+dex:
+  enabled: false
+
+server:
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+
+controller:
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: "1", memory: 1Gi }
+
+repoServer:
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 512Mi }

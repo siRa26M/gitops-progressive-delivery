@@ -1,0 +1,32 @@
+# Metrics backend for canary AnalysisRuns.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: prometheus
+      targetRevision: 27.52.0
+      helm:
+        releaseName: prometheus
+        valueFiles:
+          - $values/platform/values/prometheus.yaml
+    - repoURL: https://github.com/siRa26M/gitops-progressive-delivery.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]
+    retry:
+      limit: 10
+      backoff: { duration: 10s, factor: 2, maxDuration: 3m }

@@ -1,0 +1,52 @@
+# One Application per directory under apps/demo-app/overlays/.
+# Adding an environment = adding a folder. No branches, no copy-pasted Applications.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: demo-app
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/siRa26M/gitops-progressive-delivery.git
+        revision: HEAD
+        directories:
+          - path: apps/demo-app/overlays/*
+  template:
+    metadata:
+      name: "demo-app-{{ .path.basename }}"
+      labels:
+        app.kubernetes.io/part-of: demo-app
+        env: "{{ .path.basename }}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: apps
+      source:
+        repoURL: https://github.com/siRa26M/gitops-progressive-delivery.git
+        targetRevision: HEAD
+        path: "{{ .path.path }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{ .path.basename }}"
+      # Argo Rollouts owns the live canary weights; Git owns everything else.
+      ignoreDifferences:
+        - group: traefik.io
+          kind: TraefikService
+          jqPathExpressions:
+            - .spec.weighted.services[].weight
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true # <- drift reconciliation
+        syncOptions:
+          - RespectIgnoreDifferences=true
+          - SkipDryRunOnMissingResource=true
+          - PruneLast=true
+        retry:
+          limit: 10
+          backoff: { duration: 10s, factor: 2, maxDuration: 3m }

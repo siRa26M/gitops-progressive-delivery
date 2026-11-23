@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "SealedSecret payloads are RSA-OAEP/AES-GCM ciphertext, decryptable only in-cluster"
+paths = ['''apps/.*/sealed-secret\.yaml''']

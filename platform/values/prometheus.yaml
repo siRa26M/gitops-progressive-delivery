@@ -1,0 +1,28 @@
+# Lean Prometheus: only what canary analysis needs. Pods opt in with
+# prometheus.io/scrape annotations; the default `kubernetes-pods` job maps pod
+# labels (incl. rollouts-pod-template-hash) onto series, which is how the
+# AnalysisTemplate isolates canary traffic from stable traffic.
+alertmanager:
+  enabled: false
+kube-state-metrics:
+  enabled: false
+prometheus-node-exporter:
+  enabled: false
+prometheus-pushgateway:
+  enabled: false
+
+server:
+  global:
+    scrape_interval: 10s
+    evaluation_interval: 10s
+  retention: 2d
+  persistentVolume:
+    enabled: false
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hosts:
+      - prometheus.127.0.0.1.nip.io
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: "1", memory: 1Gi }

@@ -1,0 +1,77 @@
+# CI builds and verifies artifacts. It never deploys: the cluster pulls desired
+# state from Git via Argo CD (no cluster credentials live in CI).
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.24" }
+      - run: cd app && go vet ./... && go test -race ./...
+
+  manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install kustomize + kubeconform
+        run: |
+          curl -sSL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.5.0/kustomize_v5.5.0_linux_amd64.tar.gz | tar xz -C /usr/local/bin
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz -C /usr/local/bin
+      - name: Stub SealedSecrets on forks that have not bootstrapped yet
+        run: |
+          for e in dev staging prod; do
+            f=apps/demo-app/overlays/$e/sealed-secret.yaml
+            [ -f "$f" ] || printf 'apiVersion: bitnami.com/v1alpha1\nkind: SealedSecret\nmetadata: {name: demo-app-secrets, namespace: %s}\nspec: {encryptedData: {API_KEY: AgA=}}\n' "$e" > "$f"
+          done
+      - run: make validate
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Fail on any plaintext secret in history
+        uses: gitleaks/gitleaks-action@v2
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+      - name: Fail if a raw Secret manifest is committed
+        run: |
+          if grep -rlE '^kind:\s*Secret\s*$' --include='*.yaml' apps platform; then
+            echo "::error::plain Kubernetes Secret found - use scripts/seal-secret.sh"; exit 1
+          fi
+      - name: shellcheck
+        run: shellcheck bootstrap.sh teardown.sh scripts/*.sh
+
+  image:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [app, manifests, security]
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        run: |
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/demo-app" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: app
+          push: true
+          build-args: VERSION=${{ steps.meta.outputs.version }}
+          tags: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}

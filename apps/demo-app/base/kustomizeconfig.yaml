@@ -1,0 +1,19 @@
+# Teach Kustomize that a Rollout references ConfigMaps/Secrets/Services, so
+# hashed generator names (demo-app-config-<hash>) are rewritten inside it.
+# Changing config therefore changes the pod template => triggers a canary.
+nameReference:
+  - kind: ConfigMap
+    version: v1
+    fieldSpecs:
+      - { kind: Rollout, path: spec/template/spec/containers/envFrom/configMapRef/name }
+      - { kind: Rollout, path: spec/template/spec/containers/env/valueFrom/configMapKeyRef/name }
+      - { kind: Rollout, path: spec/template/spec/volumes/configMap/name }
+  - kind: Secret
+    version: v1
+    fieldSpecs:
+      - { kind: Rollout, path: spec/template/spec/volumes/secret/secretName }
+  - kind: Service
+    version: v1
+    fieldSpecs:
+      - { kind: Rollout, path: spec/strategy/canary/stableService }
+      - { kind: Rollout, path: spec/strategy/canary/canaryService }

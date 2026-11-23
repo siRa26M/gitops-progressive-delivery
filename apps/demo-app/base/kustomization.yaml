@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: demo-app
+      app.kubernetes.io/managed-by: argocd
+    includeSelectors: false
+
+resources:
+  - guardrails.yaml
+  - network-policies.yaml
+  - networking.yaml
+  - analysis-template.yaml
+  - rollout.yaml
+  - loadgen.yaml
+
+configurations:
+  - kustomizeconfig.yaml
+
+# Old hashed ConfigMaps must outlive a canary (stable pods still reference
+# them and an abort rolls back to them), so Argo CD never prunes them.
+generatorOptions:
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+    argocd.argoproj.io/compare-options: IgnoreExtraneous
+
+configMapGenerator:
+  - name: demo-app-config
+    literals:
+      - APP_ENV=base
+      - APP_MESSAGE=hello from demo-app
+      - ERROR_RATE=0
+      - LATENCY_MS=0
+  - name: loadgen-config
+    literals:
+      - EDGE_URL=http://traefik.traefik.svc.cluster.local/
+      - TARGET_HOST=demo.127.0.0.1.nip.io
