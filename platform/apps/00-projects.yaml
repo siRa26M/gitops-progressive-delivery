@@ -12,7 +12,7 @@ spec:
   description: Cluster-wide platform components
   sourceRepos:
     - https://github.com/siRa26M/gitops-progressive-delivery.git
-    - https://bitnami-labs.github.io/sealed-secrets
+    - https://bitnami.github.io/sealed-secrets
     - https://traefik.github.io/charts
     - https://argoproj.github.io/argo-helm
     - https://prometheus-community.github.io/helm-charts

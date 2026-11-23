@@ -23,3 +23,7 @@ providers:
 resources:
   requests: { cpu: 50m, memory: 64Mi }
   limits: { cpu: 500m, memory: 256Mi }
+
+# kind has no load balancer: publish 127.0.0.1 on Ingress status so Argo CD sees them Healthy
+additionalArguments:
+  - --providers.kubernetesingress.ingressendpoint.ip=127.0.0.1
