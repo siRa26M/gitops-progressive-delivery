@@ -102,7 +102,7 @@ make drift    ENV=prod                # kubectl tampering; Argo CD self-heals (t
 make status | traffic ENV=dev | watch ENV=dev
 ```
 
-A walkthrough for the live session is in [`docs/DEMO.md`](docs/DEMO.md).
+
 
 ## Key design decisions
 
